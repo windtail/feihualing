@@ -43,7 +43,8 @@ func NewEntryScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *EntryScr
 			abstract := widget.NewLabel("")
 			showDetailBtn := widget.NewButtonWithIcon("", theme.NavigateNextIcon(), func() {
 			})
-			return container.NewBorder(nil, nil, showDetailBtn, nil, abstract)
+			toggleFavorBtn := widget.NewButtonWithIcon("", starOutlineSvg, func() {})
+			return container.NewBorder(nil, nil, showDetailBtn, toggleFavorBtn, abstract)
 		},
 		func(item binding.DataItem, o fyne.CanvasObject) {
 			item.AddListener(binding.NewDataListener(func() {
@@ -51,7 +52,7 @@ func NewEntryScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *EntryScr
 				p := i.(*Poem)
 
 				objs := o.(*fyne.Container).Objects
-				abstract, showDetailBtn := objs[0].(*widget.Label), objs[1].(*widget.Button)
+				abstract, showDetailBtn, toggleFavorBtn := objs[0].(*widget.Label), objs[1].(*widget.Button), objs[2].(*widget.Button)
 
 				abstract.SetText(p.Abstract())
 
@@ -59,6 +60,21 @@ func NewEntryScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *EntryScr
 					s, _ := search.Get()
 					search_ := s.(*Search)
 					mgr.SwitchToWithCtx("detail", NewDetailContext(p, search_))
+				}
+
+				updateToggleFavorBtn := func(favor bool) {
+					if favor {
+						toggleFavorBtn.SetIcon(starFillSvg)
+					} else {
+						toggleFavorBtn.SetIcon(starOutlineSvg)
+					}
+				}
+
+				updateToggleFavorBtn(p.Favor)
+
+				toggleFavorBtn.OnTapped = func() {
+					p.Favor = !p.Favor
+					updateToggleFavorBtn(p.Favor)
 				}
 			}))
 		})
@@ -68,7 +84,8 @@ func NewEntryScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *EntryScr
 			preview := widget.NewRichTextWithText("\n")
 			showDetailBtn := widget.NewButtonWithIcon("", theme.NavigateNextIcon(), func() {
 			})
-			return container.NewBorder(nil, nil, showDetailBtn, nil, preview)
+			toggleFavorBtn := widget.NewButtonWithIcon("", starOutlineSvg, func() {})
+			return container.NewBorder(nil, nil, showDetailBtn, toggleFavorBtn, preview)
 		},
 		func(item binding.DataItem, o fyne.CanvasObject) {
 			item.AddListener(binding.NewDataListener(func() {
@@ -76,7 +93,7 @@ func NewEntryScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *EntryScr
 				p := i.(*Poem)
 
 				objs := o.(*fyne.Container).Objects
-				preview, showDetailBtn := objs[0].(*widget.RichText), objs[1].(*widget.Button)
+				preview, showDetailBtn, toggleFavorBtn := objs[0].(*widget.RichText), objs[1].(*widget.Button), objs[2].(*widget.Button)
 
 				s, _ := search.Get()
 				search_ := s.(*Search)
@@ -84,6 +101,21 @@ func NewEntryScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *EntryScr
 
 				showDetailBtn.OnTapped = func() {
 					mgr.SwitchToWithCtx("detail", NewDetailContext(p, search_))
+				}
+
+				updateToggleFavorBtn := func(favor bool) {
+					if favor {
+						toggleFavorBtn.SetIcon(starFillSvg)
+					} else {
+						toggleFavorBtn.SetIcon(starOutlineSvg)
+					}
+				}
+
+				updateToggleFavorBtn(p.Favor)
+
+				toggleFavorBtn.OnTapped = func() {
+					p.Favor = !p.Favor
+					updateToggleFavorBtn(p.Favor)
 				}
 			}))
 		})
