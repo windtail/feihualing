@@ -1,18 +1,21 @@
 package main
 
 import (
+	"errors"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"strconv"
 )
 
 type EntryScreen struct {
 	root fyne.CanvasObject
 }
 
-func NewEntryScreen(poems *Poems, mgr *ScreenManager) *EntryScreen {
+func NewEntryScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *EntryScreen {
 	search := binding.NewUntyped()
 	_ = search.Set(EmptySearch())
 
@@ -62,8 +65,37 @@ func NewEntryScreen(poems *Poems, mgr *ScreenManager) *EntryScreen {
 			}
 		})
 
-	addPoemBtn := widget.NewButtonWithIcon("添加", theme.ContentAddIcon(), func() {
+	addBtn := widget.NewButtonWithIcon("添加", theme.ContentAddIcon(), func() {
 		// TODO add poem
+	})
+	gotoBtn := widget.NewButtonWithIcon("跳转", theme.SearchIcon(), func() {
+		text := widget.NewEntry()
+		text.Validator = func(s string) error {
+			if _, err := strconv.ParseUint(s, 10, 64); err != nil {
+				return errors.New("请输入正整数")
+			}
+			return nil
+		}
+		dialog.ShowForm("提示", "跳转", "关闭", []*widget.FormItem{widget.NewFormItem("序号", text)}, func(b bool) {
+			if !b {
+				return
+			}
+
+			id_, err := strconv.ParseUint(text.Text, 10, 64)
+			if err != nil {
+				return
+			}
+			id := int64(id_)
+
+			list, _ := poemData.Get()
+			for row, p := range list {
+				poem := p.(*Poem)
+				if poem.Id == id {
+					poemList.Select(row)
+					break
+				}
+			}
+		}, win)
 	})
 
 	search.AddListener(binding.NewDataListener(func() {
@@ -80,7 +112,7 @@ func NewEntryScreen(poems *Poems, mgr *ScreenManager) *EntryScreen {
 		poemList.Refresh()
 	}))
 
-	root := container.NewBorder(searchBar, addPoemBtn, nil, nil, poemList)
+	root := container.NewBorder(searchBar, container.NewGridWithColumns(2, gotoBtn, addBtn), nil, nil, poemList)
 
 	return &EntryScreen{root: root}
 }
