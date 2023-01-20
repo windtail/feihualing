@@ -38,32 +38,68 @@ func NewEntryScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *EntryScr
 	searchBar := container.NewBorder(nil, nil, favorCheck, clearRuleBtn, ruleEntry)
 
 	poemData := binding.NewUntypedList()
-	poemList := widget.NewListWithData(poemData,
+	poemBrowserList := widget.NewListWithData(poemData,
 		func() fyne.CanvasObject {
 			abstract := widget.NewLabel("")
-			preview := widget.NewRichTextWithText("")
 			showDetailBtn := widget.NewButtonWithIcon("", theme.NavigateNextIcon(), func() {
 			})
-			return container.NewBorder(nil, nil, showDetailBtn, nil, container.NewGridWithRows(2, abstract, preview))
+			return container.NewBorder(nil, nil, showDetailBtn, nil, abstract)
 		},
 		func(item binding.DataItem, o fyne.CanvasObject) {
-			i, _ := item.(binding.Untyped).Get()
-			p := i.(*Poem)
+			item.AddListener(binding.NewDataListener(func() {
+				i, _ := item.(binding.Untyped).Get()
+				p := i.(*Poem)
 
-			objs := o.(*fyne.Container).Objects
-			grid, showDetailBtn := objs[0].(*fyne.Container), objs[1].(*widget.Button)
-			objs = grid.Objects
-			abstract, preview := objs[0].(*widget.Label), objs[1].(*widget.RichText)
+				objs := o.(*fyne.Container).Objects
+				abstract, showDetailBtn := objs[0].(*widget.Label), objs[1].(*widget.Button)
 
-			abstract.SetText(p.Abstract())
-			s, _ := search.Get()
-			search_ := s.(*Search)
-			preview.ParseMarkdown(p.PreviewMarkdown(search_))
+				abstract.SetText(p.Abstract())
 
-			showDetailBtn.OnTapped = func() {
-				mgr.SwitchToWithCtx("detail", NewDetailContext(p, search_))
-			}
+				showDetailBtn.OnTapped = func() {
+					s, _ := search.Get()
+					search_ := s.(*Search)
+					mgr.SwitchToWithCtx("detail", NewDetailContext(p, search_))
+				}
+			}))
 		})
+
+	poemSearchList := widget.NewListWithData(poemData,
+		func() fyne.CanvasObject {
+			preview := widget.NewRichTextWithText("\n")
+			showDetailBtn := widget.NewButtonWithIcon("", theme.NavigateNextIcon(), func() {
+			})
+			return container.NewBorder(nil, nil, showDetailBtn, nil, preview)
+		},
+		func(item binding.DataItem, o fyne.CanvasObject) {
+			item.AddListener(binding.NewDataListener(func() {
+				i, _ := item.(binding.Untyped).Get()
+				p := i.(*Poem)
+
+				objs := o.(*fyne.Container).Objects
+				preview, showDetailBtn := objs[0].(*widget.RichText), objs[1].(*widget.Button)
+
+				s, _ := search.Get()
+				search_ := s.(*Search)
+				preview.ParseMarkdown(p.PreviewMarkdown(search_))
+
+				showDetailBtn.OnTapped = func() {
+					mgr.SwitchToWithCtx("detail", NewDetailContext(p, search_))
+				}
+			}))
+		})
+
+	showSearchList := func(b bool) {
+		if b {
+			poemSearchList.Refresh()
+			poemSearchList.Show()
+			poemBrowserList.Hide()
+		} else {
+			poemSearchList.Hide()
+			poemBrowserList.Refresh()
+			poemBrowserList.Show()
+		}
+	}
+	showSearchList(false)
 
 	addBtn := widget.NewButtonWithIcon("添加", theme.ContentAddIcon(), func() {
 		// TODO add poem
@@ -91,7 +127,8 @@ func NewEntryScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *EntryScr
 			for row, p := range list {
 				poem := p.(*Poem)
 				if poem.Id == id {
-					poemList.Select(row)
+					poemBrowserList.Select(row)
+					poemSearchList.Select(row)
 					break
 				}
 			}
@@ -109,10 +146,10 @@ func NewEntryScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *EntryScr
 		}
 
 		_ = poemData.Set(filtered)
-		poemList.Refresh()
+		showSearchList(search_.HasKeyword())
 	}))
 
-	root := container.NewBorder(searchBar, container.NewGridWithColumns(2, gotoBtn, addBtn), nil, nil, poemList)
+	root := container.NewBorder(searchBar, container.NewGridWithColumns(2, gotoBtn, addBtn), nil, nil, container.NewMax(poemBrowserList, poemSearchList))
 
 	return &EntryScreen{root: root}
 }

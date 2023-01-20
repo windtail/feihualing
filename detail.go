@@ -64,7 +64,7 @@ func NewDetailScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *DetailS
 		}
 		p := ctx.(*DetailContext)
 
-		text.ParseMarkdown(p.poem.Markdown(p.search))
+		text.ParseMarkdown(p.poem.DetailMarkdown(p.search))
 	}))
 
 	return &DetailScreen{

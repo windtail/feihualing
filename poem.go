@@ -7,57 +7,116 @@ import (
 	"fmt"
 	"fyne.io/fyne/v2"
 	"io/ioutil"
+	"regexp"
 	"strings"
 	"text/template"
 )
 
 type Poem struct {
-	Id      int64  `json:"id"`
-	Title   string `json:"title"`
-	Dynasty string `json:"dynasty"`
-	Author  string `json:"author"`
-	Content string `json:"content"`
-	Favor   bool   `json:"favor"`
+	Id       int64  `json:"id"`
+	Title    string `json:"title"`
+	Dynasty  string `json:"dynasty"`
+	Author   string `json:"author"`
+	Content  string `json:"content"`
+	Favor    bool   `json:"favor"`
+	segments []string
 }
 
 func (p *Poem) Abstract() string {
 	return fmt.Sprintf("%d. %s  (%s %s)", p.Id, p.Title, p.Dynasty, p.Author)
 }
 
-type PoemTemplateItem struct {
+func (p *Poem) MakeSegments() {
+	content := strings.ReplaceAll(p.Content, "\n", "")
+	r := regexp.MustCompile(`.*?[，。：？！,.:?!]`)
+	p.segments = r.FindAllString(content, -1)
+}
+
+func highlight(s, key string) string {
+	return strings.ReplaceAll(s, key, fmt.Sprintf(" **%s** ", key))
+}
+
+type PoemDetailTemplateContext struct {
 	*Poem
 	MarkdownContent string
 }
 
-func NewPoemTemplateItem(poem *Poem, s *Search) *PoemTemplateItem {
+func NewPoemDetailTemplateContext(poem *Poem, s *Search) *PoemDetailTemplateContext {
 	content := strings.ReplaceAll(poem.Content, "\n", "\n\n")
 
 	for _, key := range s.Content {
-		content = strings.ReplaceAll(content, key, fmt.Sprintf(" **%s** ", key))
+		content = highlight(content, key)
 	}
 
-	return &PoemTemplateItem{Poem: poem, MarkdownContent: content}
+	return &PoemDetailTemplateContext{Poem: poem, MarkdownContent: content}
 }
 
-var poemMarkdownTpl *template.Template
+var poemDetailMarkdownTpl *template.Template
+
+type PoemPreviewTemplateContext struct {
+	*Poem
+	MarkdownContent string
+}
+
+func NewPoemPreviewTemplateContext(poem *Poem, s *Search) *PoemPreviewTemplateContext {
+	const MaxSegment = 2
+
+	segments := make([]string, 0, MaxSegment)
+
+	matched := func(seg string) bool {
+		for _, key := range s.Content {
+			if strings.Contains(seg, key) {
+				return true
+			}
+		}
+		return false
+	}
+
+	highlighted := func(seg string) string {
+		for _, key := range s.Content {
+			seg = highlight(seg, key)
+		}
+		return seg
+	}
+
+	for _, seg := range poem.segments {
+		if matched(seg) {
+			segments = append(segments, highlighted(seg))
+			if len(segments) == MaxSegment {
+				break
+			}
+		}
+	}
+
+	return &PoemPreviewTemplateContext{Poem: poem, MarkdownContent: strings.Join(segments, "")}
+}
+
+var poemPreviewMarkdownTpl *template.Template
 
 func init() {
-	poemMarkdownTpl, _ = template.New("poem").Parse(`# {{.Title}}
+	poemDetailMarkdownTpl, _ = template.New("detail").Parse(`# {{.Title}}
 
 {{.Dynasty}} {{.Author}}
 
 {{.MarkdownContent}}`)
+
+	poemPreviewMarkdownTpl, _ = template.New("preview").Parse(`	{{.Abstract}}
+
+{{.MarkdownContent}}`)
 }
 
-func (p *Poem) Markdown(s *Search) string {
+func (p *Poem) DetailMarkdown(s *Search) string {
 	var buf bytes.Buffer
-	_ = poemMarkdownTpl.Execute(&buf, NewPoemTemplateItem(p, s))
+	_ = poemDetailMarkdownTpl.Execute(&buf, NewPoemDetailTemplateContext(p, s))
 
 	return buf.String()
 }
 
 func (p *Poem) PreviewMarkdown(s *Search) string {
-	return strings.Join(strings.Split(p.Content, "\n")[:2], "")
+	var buf bytes.Buffer
+	_ = poemPreviewMarkdownTpl.Execute(&buf, NewPoemPreviewTemplateContext(p, s))
+
+	return buf.String()
 }
 
 func (p *Poem) Matched(s *Search) bool {
@@ -115,8 +174,15 @@ func NewPoems() *Poems {
 //go:embed poems.json
 var _defaultPoems []byte
 
+func (p *Poems) MakeSegments() {
+	for _, poem := range p.list {
+		poem.MakeSegments()
+	}
+}
+
 func (p *Poems) LoadDefault() {
 	_ = json.Unmarshal(_defaultPoems, &p.list)
+	p.MakeSegments()
 }
 
 func (p *Poems) Load(reader fyne.URIReadCloser) (err error) {
@@ -127,7 +193,11 @@ func (p *Poems) Load(reader fyne.URIReadCloser) (err error) {
 	if data, err := ioutil.ReadAll(reader); err != nil {
 		return err
 	} else {
-		return json.Unmarshal(data, &p.list)
+		if err := json.Unmarshal(data, &p.list); err != nil {
+			return err
+		}
+		p.MakeSegments()
+		return nil
 	}
 }
 

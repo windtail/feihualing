@@ -54,3 +54,7 @@ func NewSearch(rule string, favorOnly bool) *Search {
 
 	return s
 }
+
+func (s *Search) HasKeyword() bool {
+	return (len(s.Title) != 0) || (len(s.Dynasty) != 0) || (len(s.Author) != 0) || (len(s.Content) != 0)
+}
