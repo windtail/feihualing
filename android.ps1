@@ -1,1 +1,1 @@
-fyne-cross.exe android -arch arm64 -app-id cn.poem.flower -env GOPROXY=https://goproxy.cn,direct
+fyne-cross.exe android -arch arm64 -app-id cn.poem.flower -ldflags "-s -w" -env GOPROXY=https://goproxy.cn,direct

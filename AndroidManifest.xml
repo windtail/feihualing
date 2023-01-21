@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" android:versionCode="1" android:versionName="1.0" package="cn.poem.flower" platformBuildVersionCode="17" platformBuildVersionName="4.0.4-1406430">
-    <application android:label="筱筱飞花" android:debuggable="true">
+    <application android:label="筱筱飞花" android:debuggable="false">
         <activity android:label="筱筱飞花" android:name="org.golang.app.GoNativeActivity" android:configChanges="keyboardHidden|orientation">
             <meta-data android:name="android.app.lib_name" android:value="flower"/>
             <intent-filter>
