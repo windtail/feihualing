@@ -12,7 +12,8 @@ import (
 )
 
 type EntryScreen struct {
-	root fyne.CanvasObject
+	root   fyne.CanvasObject
+	update func()
 }
 
 func NewEntryScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *EntryScreen {
@@ -133,9 +134,20 @@ func NewEntryScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *EntryScr
 	}
 	showSearchList(false)
 
-	addBtn := widget.NewButtonWithIcon("添加", theme.ContentAddIcon(), func() {
-		// TODO add poem
-	})
+	updateList := func() {
+		s, _ := search.Get()
+		search_ := s.(*Search)
+		filteredPoems := poems.Filter(search_)
+
+		filtered := make([]interface{}, len(filteredPoems))
+		for i := range filtered {
+			filtered[i] = filteredPoems[i]
+		}
+
+		_ = poemData.Set(filtered)
+		showSearchList(search_.HasKeyword())
+	}
+
 	gotoBtn := widget.NewButtonWithIcon("跳转", theme.SearchIcon(), func() {
 		text := widget.NewEntry()
 		text.Validator = func(s string) error {
@@ -149,16 +161,15 @@ func NewEntryScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *EntryScr
 				return
 			}
 
-			id_, err := strconv.ParseUint(text.Text, 10, 64)
+			id, err := strconv.ParseUint(text.Text, 10, 64)
 			if err != nil {
 				return
 			}
-			id := int64(id_)
 
 			list, _ := poemData.Get()
 			for row, p := range list {
 				poem := p.(*Poem)
-				if poem.Id == id {
+				if poem.ID == id {
 					poemBrowserList.Select(row)
 					poemSearchList.Select(row)
 					break
@@ -166,27 +177,49 @@ func NewEntryScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *EntryScr
 			}
 		}, win)
 	})
+	exportBtn := widget.NewButtonWithIcon("导出", theme.DocumentSaveIcon(), func() {
+		dialog.ShowFileSave(func(writer fyne.URIWriteCloser, err error) {
+			if err != nil || writer == nil {
+				return
+			}
 
-	search.AddListener(binding.NewDataListener(func() {
-		s, _ := search.Get()
-		search_ := s.(*Search)
-		filteredPoems := poems.Filter(search_)
+			if err := poems.Export(writer); err != nil {
+				dialog.ShowError(err, win)
+			} else {
+				dialog.ShowInformation(" 提示", "导出成功", win)
+			}
+		}, win)
+	})
+	importBtn := widget.NewButtonWithIcon("导入", theme.FolderOpenIcon(), func() {
+		dialog.ShowFileOpen(func(reader fyne.URIReadCloser, err error) {
+			if err != nil || reader == nil {
+				return
+			}
 
-		filtered := make([]interface{}, len(filteredPoems))
-		for i := range filtered {
-			filtered[i] = filteredPoems[i]
-		}
+			defer func() {
+				err = reader.Close()
+			}()
+			if err := poems.Import(reader); err != nil {
+				dialog.ShowError(err, win)
+			}
+			updateList()
+		}, win)
+	})
+	addBtn := widget.NewButtonWithIcon("添加", theme.ContentAddIcon(), func() {
+		// TODO add poem
+	})
 
-		_ = poemData.Set(filtered)
-		showSearchList(search_.HasKeyword())
-	}))
+	search.AddListener(binding.NewDataListener(updateList))
 
-	root := container.NewBorder(searchBar, container.NewGridWithColumns(2, gotoBtn, addBtn), nil, nil, container.NewMax(poemBrowserList, poemSearchList))
+	root := container.NewBorder(searchBar, container.NewGridWithColumns(4, gotoBtn, exportBtn, importBtn, addBtn), nil, nil, container.NewMax(poemBrowserList, poemSearchList))
 
-	return &EntryScreen{root: root}
+	return &EntryScreen{root: root, update: updateList}
 }
 
-func (s *EntryScreen) Show(interface{}) {
+func (s *EntryScreen) Show(update_ interface{}) {
+	if update_ != nil && update_.(bool) {
+		s.update()
+	}
 	s.root.Show()
 }
 

@@ -2,7 +2,11 @@ module vdesk_go
 
 go 1.18
 
-require fyne.io/fyne/v2 v2.3.0
+require (
+	fyne.io/fyne/v2 v2.3.0
+	gorm.io/driver/sqlite v1.4.4
+	gorm.io/gorm v1.24.3
+)
 
 require (
 	fyne.io/systray v1.10.1-0.20221115204952-d16a6177e6f1 // indirect
@@ -22,7 +26,10 @@ require (
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/goki/freetype v0.0.0-20220119013949-7a161fd3728c // indirect
 	github.com/gopherjs/gopherjs v1.17.2 // indirect
+	github.com/jinzhu/inflection v1.0.0 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/jsummers/gobmp v0.0.0-20151104160322-e2ba15ffa76e // indirect
+	github.com/mattn/go-sqlite3 v1.14.16 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/srwiley/oksvg v0.0.0-20220731023508-a61f04f16b76 // indirect
 	github.com/srwiley/rasterx v0.0.0-20210519020934-456a8d69b780 // indirect

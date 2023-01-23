@@ -44,6 +44,8 @@ func NewDetailScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *DetailS
 
 				if err := poems.Remove(p); err != nil {
 					dialog.ShowError(err, win)
+				} else {
+					mgr.SwitchToWithCtx("entry", true)
 				}
 			}, win)
 		}

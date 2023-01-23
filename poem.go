@@ -4,32 +4,50 @@ import (
 	"bytes"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"fyne.io/fyne/v2"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"text/template"
 )
 
 type Poem struct {
-	Id       int64  `json:"id"`
-	Title    string `json:"title"`
-	Dynasty  string `json:"dynasty"`
-	Author   string `json:"author"`
-	Content  string `json:"content"`
-	Favor    bool   `json:"favor"`
-	segments []string
+	ID       uint64     `json:"id" gorm:"primarykey"`
+	Title    string     `json:"title"`
+	Dynasty  string     `json:"dynasty"`
+	Author   string     `json:"author"`
+	Content  string     `json:"content"`
+	Favor    bool       `json:"favor"`
+	Segments []*Segment `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+}
+
+type Segment struct {
+	ID      uint64 `gorm:"primarykey"`
+	Content string
+	PoemID  uint64
 }
 
 func (p *Poem) Abstract() string {
-	return fmt.Sprintf("%d. %s  (%s %s)", p.Id, p.Title, p.Dynasty, p.Author)
+	return fmt.Sprintf("%d. %s  (%s %s)", p.ID, p.Title, p.Dynasty, p.Author)
 }
 
 func (p *Poem) MakeSegments() {
 	content := strings.ReplaceAll(p.Content, "\n", "")
 	r := regexp.MustCompile(`.*?[，。：？！,.:?!]`)
-	p.segments = r.FindAllString(content, -1)
+	segments := r.FindAllString(content, -1)
+	p.Segments = make([]*Segment, 0, len(segments))
+	for _, seg := range segments {
+		p.Segments = append(p.Segments, &Segment{
+			Content: seg,
+			PoemID:  p.ID,
+		})
+	}
 }
 
 func highlight(s, key string) string {
@@ -79,9 +97,9 @@ func NewPoemPreviewTemplateContext(poem *Poem, s *Search) *PoemPreviewTemplateCo
 		return seg
 	}
 
-	for _, seg := range poem.segments {
-		if matched(seg) {
-			segments = append(segments, highlighted(seg))
+	for _, seg := range poem.Segments {
+		if matched(seg.Content) {
+			segments = append(segments, highlighted(seg.Content))
 			if len(segments) == MaxSegment {
 				break
 			}
@@ -103,7 +121,10 @@ func init() {
 	poemPreviewMarkdownTpl, _ = template.New("preview").Parse(`	{{.Abstract}}
 
 {{.MarkdownContent}}`)
+
 }
+
+var db *gorm.DB
 
 func (p *Poem) DetailMarkdown(s *Search) string {
 	var buf bytes.Buffer
@@ -121,7 +142,7 @@ func (p *Poem) PreviewMarkdown(s *Search) string {
 
 func (p *Poem) Matched(s *Search) bool {
 	if s.Id != 0 {
-		if p.Id != s.Id {
+		if p.ID != s.Id {
 			return false
 		}
 	}
@@ -180,6 +201,83 @@ func (p *Poems) MakeSegments() {
 	}
 }
 
+func toFilePath(uri string) (string, error) {
+	if !strings.HasPrefix(uri, "file://") {
+		return "", errors.New("unexpected uri")
+	} else {
+		return uri[len("file://"):], nil
+	}
+}
+
+func transaction(f func(tx *gorm.DB) error) (err error) {
+	tx := db.Begin()
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			err = errors.New("unexpected error")
+		}
+	}()
+
+	err = f(tx)
+	if err == nil {
+		err = tx.Commit().Error
+	}
+
+	return
+}
+
+func (p *Poems) Init(uri string) error {
+	path, err := toFilePath(uri)
+	if err != nil {
+		return err
+	}
+
+	_, err = os.Stat(path)
+	if os.IsNotExist(err) {
+		dir := filepath.Dir(path)
+		_, err = os.Stat(dir)
+		if os.IsNotExist(err) {
+			err = os.MkdirAll(dir, 0700)
+			if err != nil {
+				return err
+			}
+		}
+
+		f, err := os.Create(path)
+		if err != nil {
+			return err
+		}
+		err = f.Close()
+		if err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+
+	db, err = gorm.Open(sqlite.Open(path), &gorm.Config{})
+	if err != nil {
+		return err
+	}
+
+	err = db.AutoMigrate(&Poem{}, &Segment{})
+	if err != nil {
+		return err
+	}
+	err = db.Exec("PRAGMA foreign_keys=ON").Error
+	if err != nil {
+		return err
+	}
+
+	err = db.Model(&Poem{}).Preload("Segments").Find(&p.list).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (p *Poems) LoadDefault() {
 	_ = json.Unmarshal(_defaultPoems, &p.list)
 	p.MakeSegments()
@@ -199,6 +297,39 @@ func (p *Poems) Load(reader fyne.URIReadCloser) (err error) {
 		p.MakeSegments()
 		return nil
 	}
+}
+
+func (p *Poems) Clear() error {
+	if err := db.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Poem{}).Error; err != nil {
+		return err
+	}
+
+	p.list = make([]*Poem, 0)
+	return nil
+}
+
+func (p *Poems) createAll() error {
+	return transaction(func(tx *gorm.DB) error {
+		for _, poem := range p.list {
+			if err := db.Create(poem).Error; err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func (p *Poems) Import(reader fyne.URIReadCloser) error {
+	if err := p.Clear(); err != nil {
+		return nil
+	}
+
+	if err := p.Load(reader); err != nil {
+		return nil
+	}
+
+	return p.createAll()
 }
 
 func (p *Poems) Store(writer fyne.URIWriteCloser) (err error) {
@@ -222,6 +353,10 @@ func (p *Poems) Store(writer fyne.URIWriteCloser) (err error) {
 	return nil
 }
 
+func (p *Poems) Export(writer fyne.URIWriteCloser) error {
+	return p.Store(writer)
+}
+
 func (p *Poems) Filter(s *Search) []*Poem {
 	filtered := make([]*Poem, 0, len(p.list))
 
@@ -234,7 +369,17 @@ func (p *Poems) Filter(s *Search) []*Poem {
 	return filtered
 }
 
-func (p *Poems) Remove(poem *Poem) (err error) {
-	// TODO do remove
+func (p *Poems) Remove(poem *Poem) error {
+	if err := db.Delete(poem).Error; err != nil {
+		return err
+	}
+
+	for i, pm := range p.list {
+		if pm == poem {
+			p.list = append(p.list[:i], p.list[i+1:]...)
+			break
+		}
+	}
+
 	return nil
 }

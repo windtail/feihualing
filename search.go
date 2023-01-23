@@ -6,7 +6,7 @@ import (
 )
 
 type Search struct {
-	Id        int64
+	Id        uint64
 	Title     string
 	Dynasty   string
 	Author    string
@@ -45,7 +45,7 @@ func NewSearch(rule string, favorOnly bool) *Search {
 			if i, err := strconv.ParseUint(part, 10, 64); err != nil {
 				s.Content = append(s.Content, part)
 			} else {
-				s.Id = int64(i)
+				s.Id = i
 			}
 		}
 	}
