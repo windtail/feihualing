@@ -55,7 +55,7 @@ func NewDetailScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *DetailS
 			return
 		} else {
 			p := ctx.(*DetailContext).poem
-			mgr.SwitchToWithCtx("edit", p)
+			mgr.SwitchToWithCtx("edit", NewEditContext(p))
 		}
 	})
 
@@ -76,6 +76,15 @@ func NewDetailScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *DetailS
 }
 
 func (s *DetailScreen) Show(ctx interface{}) {
+	c := ctx.(*DetailContext)
+	if c.search == nil { // 保持search不变
+		if old, err := s.ctx.Get(); err != nil || old == nil {
+			c.search = EmptySearch()
+		} else {
+			c.search = old.(*DetailContext).search
+		}
+	}
+
 	_ = s.ctx.Set(ctx)
 	s.root.Show()
 }

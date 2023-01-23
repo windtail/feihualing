@@ -18,13 +18,20 @@ import (
 )
 
 type Poem struct {
-	ID       uint64     `json:"id" gorm:"primarykey"`
+	ID       uint64     `json:"-" gorm:"primarykey"`
+	No       uint64     `json:"id"`
 	Title    string     `json:"title"`
 	Dynasty  string     `json:"dynasty"`
 	Author   string     `json:"author"`
 	Content  string     `json:"content"`
 	Favor    bool       `json:"favor"`
 	Segments []*Segment `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+}
+
+func NewPoem(no uint64, title string, dynasty string, author string, content string) *Poem {
+	p := &Poem{No: no, Title: title, Dynasty: dynasty, Author: author, Content: content, Favor: false}
+	p.MakeSegments()
+	return p
 }
 
 type Segment struct {
@@ -34,7 +41,7 @@ type Segment struct {
 }
 
 func (p *Poem) Abstract() string {
-	return fmt.Sprintf("%d. %s  (%s %s)", p.ID, p.Title, p.Dynasty, p.Author)
+	return fmt.Sprintf("%d. %s  (%s %s)", p.No, p.Title, p.Dynasty, p.Author)
 }
 
 func (p *Poem) MakeSegments() {
@@ -141,8 +148,8 @@ func (p *Poem) PreviewMarkdown(s *Search) string {
 }
 
 func (p *Poem) Matched(s *Search) bool {
-	if s.Id != 0 {
-		if p.ID != s.Id {
+	if s.No != 0 {
+		if p.No != s.No {
 			return false
 		}
 	}
@@ -379,6 +386,56 @@ func (p *Poems) Remove(poem *Poem) error {
 			p.list = append(p.list[:i], p.list[i+1:]...)
 			break
 		}
+	}
+
+	return nil
+}
+
+func (p *Poems) NextNo() uint64 {
+	var no uint64 = 0
+
+	for _, pp := range p.list {
+		if pp.No > no {
+			no = pp.No
+		}
+	}
+
+	return no + 1
+}
+
+func (p *Poems) Modify(oldPoem *Poem, newPoem *Poem) error {
+	newPoem.ID = oldPoem.ID
+	newPoem.Favor = oldPoem.Favor
+
+	if err := db.Updates(newPoem).Error; err != nil {
+		return err
+	}
+
+	for i, pp := range p.list {
+		if pp.ID == newPoem.ID {
+			p.list[i] = newPoem
+			break
+		}
+	}
+	return nil
+}
+
+func (p *Poems) Add(poem *Poem) error {
+	if err := db.Create(poem).Error; err != nil {
+		return err
+	}
+
+	p.list = append(p.list, poem)
+	return nil
+}
+
+func (p *Poems) ToggleFavor(poem *Poem) error {
+	oldFavor := poem.Favor
+
+	poem.Favor = !oldFavor
+	if err := db.Updates(poem).Error; err != nil {
+		poem.Favor = oldFavor
+		return err
 	}
 
 	return nil

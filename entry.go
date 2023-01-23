@@ -74,8 +74,11 @@ func NewEntryScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *EntryScr
 				updateToggleFavorBtn(p.Favor)
 
 				toggleFavorBtn.OnTapped = func() {
-					p.Favor = !p.Favor
-					updateToggleFavorBtn(p.Favor)
+					if err := poems.ToggleFavor(p); err != nil {
+						dialog.ShowError(err, win)
+					} else {
+						updateToggleFavorBtn(p.Favor)
+					}
 				}
 			}))
 		})
@@ -149,19 +152,19 @@ func NewEntryScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *EntryScr
 	}
 
 	gotoBtn := widget.NewButtonWithIcon("跳转", theme.SearchIcon(), func() {
-		text := widget.NewEntry()
-		text.Validator = func(s string) error {
+		noEntry := widget.NewEntry()
+		noEntry.Validator = func(s string) error {
 			if _, err := strconv.ParseUint(s, 10, 64); err != nil {
 				return errors.New("请输入正整数")
 			}
 			return nil
 		}
-		dialog.ShowForm("提示", "跳转", "关闭", []*widget.FormItem{widget.NewFormItem("序号", text)}, func(b bool) {
+		dialog.ShowForm("提示", "跳转", "关闭", []*widget.FormItem{widget.NewFormItem("序号", noEntry)}, func(b bool) {
 			if !b {
 				return
 			}
 
-			id, err := strconv.ParseUint(text.Text, 10, 64)
+			no, err := strconv.ParseUint(noEntry.Text, 10, 64)
 			if err != nil {
 				return
 			}
@@ -169,7 +172,7 @@ func NewEntryScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *EntryScr
 			list, _ := poemData.Get()
 			for row, p := range list {
 				poem := p.(*Poem)
-				if poem.ID == id {
+				if poem.No == no {
 					poemBrowserList.Select(row)
 					poemSearchList.Select(row)
 					break
@@ -206,7 +209,7 @@ func NewEntryScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *EntryScr
 		}, win)
 	})
 	addBtn := widget.NewButtonWithIcon("添加", theme.ContentAddIcon(), func() {
-		// TODO add poem
+		mgr.SwitchTo("edit")
 	})
 
 	search.AddListener(binding.NewDataListener(updateList))
@@ -216,10 +219,8 @@ func NewEntryScreen(poems *Poems, mgr *ScreenManager, win fyne.Window) *EntryScr
 	return &EntryScreen{root: root, update: updateList}
 }
 
-func (s *EntryScreen) Show(update_ interface{}) {
-	if update_ != nil && update_.(bool) {
-		s.update()
-	}
+func (s *EntryScreen) Show(interface{}) {
+	s.update()
 	s.root.Show()
 }
 

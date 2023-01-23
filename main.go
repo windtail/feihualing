@@ -38,6 +38,7 @@ func main() {
 
 	mgr.Add("detail", NewDetailScreen(poems, mgr, myWindow))
 	mgr.Add("entry", NewEntryScreen(poems, mgr, myWindow))
+	mgr.Add("edit", NewEditScreen(poems, mgr, myWindow))
 
 	myWindow.SetContent(mgr.Build("entry"))
 	myWindow.ShowAndRun()
